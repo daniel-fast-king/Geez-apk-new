@@ -1,0 +1,83 @@
+name: 🧮 Build Geez Calculator APK
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ID: com.geez.calculator
+  APP_NAME: Kingquant Geez Calculator
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install Cordova
+        run: npm install -g cordova@12
+
+      - name: 🏗️ Create Cordova project around www/
+        run: |
+          test -f www/index.html || { echo "www/index.html is missing"; exit 1; }
+          cordova create app "$APP_ID" "$APP_NAME"
+          rm -rf app/www/*
+          cp -r www/* app/www/
+          sed -i 's#</widget>#    <preference name="Orientation" value="portrait" />\n    <preference name="BackgroundColor" value="0xff000000" />\n</widget>#' app/config.xml
+
+      - name: ➕ Add Android platform
+        working-directory: app
+        run: cordova platform add android@13.0.0
+
+      - name: 🔨 Build debug APK
+        working-directory: app
+        run: cordova build android --debug
+
+      - name: 🏷️ Collect APK
+        run: |
+          APK=$(find app/platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          test -n "$APK" || { echo "APK not found"; exit 1; }
+          mkdir -p dist
+          cp "$APK" dist/kingquant-Geez-Calculator.apk
+          ls -lh dist
+
+      - name: 📤 Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Geez-Calculator-APK
+          path: dist/Geez-Calculator.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 🚀 Publish Release (on v* tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/kingquant-Geez-Calculator.apk
