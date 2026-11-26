@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<title>ግዕዝ ሒሳብ መሥሪያ · Geez Calculator</title>
+<style>
+:root{color-scheme:dark;box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:#000;overflow:hidden;touch-action:manipulation;overscroll-behavior:none}
+body{font-family:"Noto Sans Ethiopic","Nyala","Abyssinica SIL",system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;position:relative}
+
+/* living background */
+.bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.bg i{position:absolute;width:75vmax;height:75vmax;border-radius:50%;filter:blur(95px);opacity:.32}
+.bg i:nth-child(1){background:#1f6bff;top:-35vmax;left:-30vmax;animation:d1 15s ease-in-out infinite alternate}
+.bg i:nth-child(2){background:#8a2cff;bottom:-40vmax;right:-35vmax;opacity:.26;animation:d2 18s ease-in-out infinite alternate}
+.bg i:nth-child(3){background:#00d4ff;top:35%;left:40%;width:40vmax;height:40vmax;opacity:.12;animation:d3 20s ease-in-out infinite alternate}
+@keyframes d1{to{transform:translate(14vmax,12vmax)}}
+@keyframes d2{to{transform:translate(-12vmax,-14vmax)}}
+@keyframes d3{to{transform:translate(-18vmax,10vmax)}}
+
+.calc{position:relative;z-index:1;height:100%;height:100dvh;width:100%;display:flex;flex-direction:column;gap:12px;
+  padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+
+/* display */
+.screen{position:relative;flex:0 0 29%;min-height:140px;border-radius:30px;padding:16px 22px;text-align:right;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;cursor:pointer;
+  background:linear-gradient(135deg,#ffffff 0%,#e6f1ff 34%,#82b4ff 72%,#2a6af0 100%);
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.5),0 20px 60px rgba(47,123,255,.55),inset 0 2px 0 #fff}
+.screen::before{content:"";position:absolute;top:-65%;right:-25%;width:78%;height:170%;
+  background:radial-gradient(circle,rgba(255,255,255,.9),transparent 62%);animation:shine 7s ease-in-out infinite alternate}
+.screen.flash::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 90%,rgba(47,123,255,.55),transparent 65%);animation:flash .6s ease-out forwards}
+@keyframes shine{to{transform:translate(-40%,12%) scale(1.25)}}
+@keyframes flash{from{opacity:1}to{opacity:0}}
+.tag{position:absolute;top:14px;left:20px;font-size:.8rem;font-weight:800;letter-spacing:1px;color:#0b3d91;opacity:.75}
+.toast{position:absolute;top:12px;right:16px;font-size:.75rem;font-weight:800;color:#fff;background:#0b3d91;padding:4px 12px;border-radius:99px;opacity:0;transform:translateY(-6px);transition:.2s;z-index:2}
+.toast.on{opacity:1;transform:none}
+.hist{position:relative;color:#2a58b3;opacity:.55;font-size:.95rem;font-weight:700;line-height:1.5;word-break:break-all;margin-bottom:4px}
+.expr{position:relative;color:#1f4ba6;font-size:1.3rem;font-weight:700;min-height:1.5em;word-break:break-all}
+.out{position:relative;color:#071f4d;font-size:clamp(2.3rem,12vw,4.2rem);font-weight:800;line-height:1.15;word-break:break-word}
+.out.empty{opacity:.3}
+.out.pop{animation:pop .32s cubic-bezier(.2,1.5,.4,1)}
+@keyframes pop{0%{transform:scale(.85);opacity:.3}100%{transform:scale(1);opacity:1}}
+
+/* keypad */
+.grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:10px;min-height:0}
+.k{font:inherit;border:0;border-radius:22px;cursor:pointer;color:#fff;font-size:2.1rem;font-weight:800;padding:0;
+  position:relative;overflow:hidden;transition:transform .09s;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 1px rgba(255,255,255,.18),inset 0 2px 0 rgba(255,255,255,.4),0 10px 26px var(--glow)}
+.k::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.6),transparent 55%);opacity:0;transition:opacity .4s}
+.k.hit::after{opacity:1;transition:none}
+.k:active{transform:scale(.92)}
+.k.dark{color:#1b1b1b}
+.k .t{text-shadow:0 2px 8px rgba(0,0,0,.35)}
+.k.dark .t{text-shadow:none}
+
+/* number keys: Geez | Arabic, always fill the whole key */
+.k.dg{background:rgba(255,255,255,.1);display:block}
+.k.dg .pair{position:absolute;inset:3px;display:flex;gap:3px}
+.k.dg .pair>span{display:flex;align-items:center;justify-content:center;border-radius:6px 6px 6px 6px}
+.k.dg .g{flex:1.55;border-radius:19px 6px 6px 19px;font-size:2.6rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4)}
+.k.dg .g.dark{color:#161616;text-shadow:none}
+.k.dg .a{flex:1;border-radius:6px 19px 19px 6px;font-size:1.35rem;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.k.eq{color:#071f4d}
+</style>
+</head>
+<body>
+<div class="bg"><i></i><i></i><i></i></div>
+<div class="calc">
+  <div class="screen" id="screen">
+    <div class="tag">ግዕዝ ሒሳብ</div>
+    <div class="toast" id="toast">ተቀድቷል ✓</div>
+    <div class="hist" id="hist"></div>
+    <div class="expr" id="expr"></div>
+    <div class="out empty" id="out">ባዶ</div>
+  </div>
+  <div class="grid" id="keys"></div>
+</div>
+
+<script>
+/* ---------- Ge'ez numerals: no zero, no decimal point ---------- */
+const U=["","፩","፪","፫","፬","፭","፮","፯","፰","፱"];
+const T=["","፲","፳","፴","፵","፶","፷","፸","፹","፺"];
+const pair=n=>T[Math.floor(n/10)]+U[n%10];
+function geez(s){
+  s=String(s).replace(/^0+/,"");
+  if(!s)return "";
+  const ps=[];
+  for(let i=s.length;i>0;i-=2)ps.push(parseInt(s.slice(Math.max(0,i-2),i),10));
+  let out="";
+  for(let k=ps.length-1;k>=0;k--){
+    const n=ps[k]; if(!n)continue;
+    let t=(n===1&&k>0)?"":pair(n);
+    if(k>0)t+=(k%2?"፻":"")+"፼".repeat(Math.floor(k/2));
+    out+=t;
+  }
+  return out;
+}
+const showExpr=s=>s.replace(/\d+/g,m=>geez(m)).replace(/\*/g,"×").replace(/\//g,"÷").replace(/-/g,"−");
+function showResult(r){
+  if(r==="Error")return "ስህተት";
+  if(/e/i.test(r))return r;
+  const n=parseFloat(r),sg=n<0?"−":"",x=Math.abs(n);
+  if(x===0)return "ባዶ";
+  if(Number.isInteger(x))return sg+geez(x);
+  const ip=Math.floor(x),fr=x-ip;
+  for(let d=2;d<=1000;d++){
+    const nn=Math.round(fr*d);
+    if(nn>0&&Math.abs(fr*d-nn)<1e-7)return sg+(ip?geez(ip)+" ":"")+geez(nn)+"/"+geez(d);
+  }
+  return "≈ "+sg+geez(Math.round(x));
+}
+
+/* ---------- state ---------- */
+let expr="",result="0",done=false,history=[];
+const $=id=>document.getElementById(id);
+const exprEl=$("expr"),outEl=$("out"),histEl=$("hist"),toast=$("toast"),screen=$("screen");
+function render(pop){
+  exprEl.textContent=showExpr(expr);
+  outEl.textContent=showResult(result);
+  outEl.classList.toggle("empty",result==="0");
+  histEl.innerHTML=history.map(h=>h.e+" = "+h.r).join("<br>");
+  if(pop){
+    outEl.classList.remove("pop");void outEl.offsetWidth;outEl.classList.add("pop");
+    screen.classList.remove("flash");void screen.offsetWidth;screen.classList.add("flash");
+  }
+}
+function evaluate(){
+  const c=expr.replace(/%/g,"/100");
+  if(!/^[0-9+\-*/.() ]+$/.test(c))return null;
+  try{
+    const r=Function('"use strict";return ('+c+')')();
+    if(!isFinite(r))return "Error";
+    return String(Math.round(r*1e10)/1e10);
+  }catch(e){return null}
+}
+function press(v){
+  if(navigator.vibrate)navigator.vibrate(8);
+  let pop=false;
+  if(v==="AC"){expr="";result="0";done=false;history=[]}
+  else if(v==="⌫"){
+    if(done){expr="";result="0";done=false}
+    else{expr=expr.slice(0,-1);const r=evaluate();result=(r===null||expr==="")?"0":r}
+  }
+  else if(v==="="){
+    const r=evaluate();
+    if(r!==null&&expr&&!done){
+      history.push({e:showExpr(expr),r:showResult(r)});
+      if(history.length>3)history.shift();
+      result=r;expr=(r==="Error"||r==="0")?"":r;done=true;pop=true;
+    }
+  }
+  else{
+    if(v==="T"||v==="H"||v==="M"){          /* ፲ ten · ፻ hundred · ፼ ten-thousand */
+      if(done){expr="";done=false}
+      const cur=expr.split(/[+\-*/%]/).pop();
+      const base={T:"10",H:"100",M:"10000"}[v];
+      v=cur===""?base:base.slice(1);
+    }
+    const isOp=/^[+\-*/%]$/.test(v);
+    if(done&&!isOp)expr="";
+    done=false;
+    const last=expr.slice(-1);
+    if(isOp){
+      if(expr===""&&v!=="-"){if(result!=="0"&&result!=="Error")expr=result;else return}
+      if(/[+\-*/]/.test(last)&&v!=="%")expr=expr.slice(0,-1);
+    }
+    expr+=v;
+    const r=evaluate();
+    if(r!==null)result=r;
+  }
+  render(pop);
+}
+
+/* ---------- keypad ---------- */
+const GD={"1":"፩","2":"፪","3":"፫","4":"፬","5":"፭","6":"፮","7":"፯","8":"፰","9":"፱","T":"፲","H":"፻","M":"፼"};
+const AR={"T":"10","H":"100","M":"10000"};
+const HUE={"1":350,"2":22,"3":46,"4":100,"5":160,"6":195,"7":225,"8":262,"9":292,"T":330,"H":38,"M":175};
+const OPC={"÷":[0,92,56],"×":[215,92,56],"−":[44,96,54],"+":[275,88,60]};
+const layout=[
+ ["AC","fn"],["⌫","fn"],["%","fn"],["÷","op","/"],
+ ["7","dg"],["8","dg"],["9","dg"],["×","op","*"],
+ ["4","dg"],["5","dg"],["6","dg"],["−","op","-"],
+ ["1","dg"],["2","dg"],["3","dg"],["+","op","+"],
+ ["T","dg"],["H","dg"],["M","dg"],["=","eq"]
+];
+const keys=$("keys");
+layout.forEach(([label,cls,val],i)=>{
+  const b=document.createElement("button");
+  b.className="k";
+  const v=val||label;
+  if(cls==="dg"){
+    const h=HUE[label],h2=(h+175)%360,dark=h>=38&&h<=125;
+    b.classList.add("dg");
+    b.style.setProperty("--glow","hsla("+h+",95%,55%,.38)");
+    b.innerHTML='<div class="pair"><span class="g'+(dark?' dark':'')+'" style="background:linear-gradient(150deg,hsl('+h+',95%,62%),hsl('+h+',88%,44%))">'+GD[label]+
+      '</span><span class="a" style="background:linear-gradient(150deg,hsl('+h2+',70%,38%),hsl('+h2+',72%,24%))">'+(AR[label]||label)+'</span></div>';
+  }else if(cls==="op"){
+    const [h,s,l]=OPC[label];
+    b.style.setProperty("--bg","linear-gradient(145deg,hsl("+h+","+s+"%,"+(l+8)+"%),hsl("+h+","+(s-4)+"%,"+(l-12)+"%))");
+    b.style.setProperty("--glow","hsla("+h+",95%,55%,.4)");
+    if(label==="−")b.classList.add("dark");
+    b.innerHTML='<span class="t" style="font-size:2.6rem">'+label+'</span>';
+  }else if(cls==="eq"){
+    b.classList.add("eq");
+    b.style.setProperty("--bg","linear-gradient(135deg,#2f7bff,#ffffff)");
+    b.style.setProperty("--glow","rgba(47,123,255,.7)");
+    b.innerHTML='<span style="font-size:2.6rem">=</span>';
+  }else{
+    const h=label==="AC"?350:label==="⌫"?262:200;
+    b.style.setProperty("--bg","linear-gradient(145deg,hsl("+h+",45%,34%),hsl("+h+",50%,20%))");
+    b.style.setProperty("--glow","hsla("+h+",80%,50%,.25)");
+    b.innerHTML='<span class="t" style="font-size:'+(label==="AC"?"1.8rem":"2rem")+'">'+label+'</span>';
+  }
+  b.addEventListener("pointerdown",e=>{
+    const r=b.getBoundingClientRect();
+    b.style.setProperty("--x",((e.clientX-r.left)/r.width*100)+"%");
+    b.style.setProperty("--y",((e.clientY-r.top)/r.height*100)+"%");
+    b.classList.add("hit");setTimeout(()=>b.classList.remove("hit"),70);
+  });
+  b.onclick=()=>press(v);
+  keys.appendChild(b);
+});
+
+/* ---------- keyboard + copy ---------- */
+document.addEventListener("keydown",e=>{
+  if(/^[1-9+\-*/%]$/.test(e.key))press(e.key);
+  else if(/^t$/i.test(e.key))press("T");
+  else if(/^h$/i.test(e.key))press("H");
+  else if(/^m$/i.test(e.key))press("M");
+  else if(e.key==="Enter"||e.key==="=")press("=");
+  else if(e.key==="Backspace")press("⌫");
+  else if(e.key==="Escape")press("AC");
+});
+screen.onclick=()=>{
+  try{navigator.clipboard.writeText(showResult(result)).then(()=>{
+    toast.classList.add("on");setTimeout(()=>toast.classList.remove("on"),1100)},()=>{})}catch(e){}
+};
+render();
+</script>
+</body>
+</html>
