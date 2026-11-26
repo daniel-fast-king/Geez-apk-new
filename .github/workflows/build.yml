@@ -38,12 +38,59 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 🤖 Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 🧰 Install Android platform + build tools
-        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+      - name: 🤖 Prepare Android SDK (preinstalled on the runner)
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       - name: 📦 Install Cordova
         run: |
           npm install -g cordova@12
+          cordova telemetry off || true
+          cordova --version
+
+      - name: 🏗️ Create Cordova project around your index.html
+        run: |
+          if [ -f www/index.html ]; then SRC=www/index.html
+          elif [ -f index.html ]; then SRC=index.html
+          else echo "❌ index.html not found. Repo files:"; ls -R | head -60; exit 1; fi
+          echo "Using $SRC"
+          cordova create app "$APP_ID" "$APP_NAME"
+          rm -rf app/www/*
+          cp "$SRC" app/www/index.html
+          sed -i 's#</widget>#    <preference name="Orientation" value="portrait" />\n    <preference name="BackgroundColor" value="0xff000000" />\n</widget>#' app/config.xml
+          ls -la app/www
+
+      - name: ➕ Add Android platform
+        working-directory: app
+        run: cordova platform add android@13.0.0
+
+      - name: 🔨 Build debug APK
+        working-directory: app
+        run: cordova build android --debug
+
+      - name: 🏷️ Collect APK
+        run: |
+          APK=$(find app/platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          test -n "$APK" || { echo "❌ APK not found"; exit 1; }
+          mkdir -p dist
+          cp "$APK" dist/Geez-Calculator.apk
+          ls -lh dist
+
+      - name: 📤 Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Geez-Calculator-APK
+          path: dist/Geez-Calculator.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 🚀 Publish Release (on v* tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Geez-Calculator.apk
